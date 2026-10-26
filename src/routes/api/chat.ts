@@ -103,7 +103,7 @@ export const Route = createFileRoute("/api/chat")({
           originalMessages: body.messages,
           sendReasoning: true,
           sendSources: true,
-          onError: (err) => {
+                    onError: (err: unknown) => {
             console.error("chat error", err);
             const msg = err instanceof Error ? err.message : String(err);
             if (/quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(msg))
@@ -113,8 +113,8 @@ export const Route = createFileRoute("/api/chat")({
             if (/401|invalid.*key|unauthorized/i.test(msg)) return "API key সঠিক নয় বা বাতিল হয়ে গেছে।";
             return `মডেল থেকে উত্তর আনা যায়নি: ${msg.slice(0, 200)}`;
           },
-          onFinish: async ({ messages }) => {
-            const rows = messages.map((m) => ({
+          onFinish: async ({ messages }: { messages: UIMessage[] }) => {
+            const rows = messages.map((m: UIMessage) => ({
               thread_id: body.threadId,
               user_id: userId,
               ui_id: m.id,
@@ -124,15 +124,18 @@ export const Route = createFileRoute("/api/chat")({
             const { error } = await supabase.from("messages").upsert(rows, { onConflict: "thread_id,ui_id" });
             if (error) console.error("save messages failed", error);
 
-            const firstUser = messages.find((m) => m.role === "user");
-            const firstText = firstUser?.parts.find((p) => p.type === "text");
+            const firstUser = messages.find((m: UIMessage) => m.role === "user");
+            const firstText = firstUser?.parts?.find(
+              (p: unknown): p is { type: "text"; text: string } =>
+                typeof p === "object" && p !== null && "type" in p && (p as { type: string }).type === "text"
+            );
             const update: { updated_at: string; title?: string } = { updated_at: new Date().toISOString() };
-            if (thread.title === "নতুন কথোপকথন" && firstText && "text" in firstText) {
+            if (thread.title === "নতুন কথোপকথন" && firstText?.text) {
               update.title = firstText.text.slice(0, 60);
             }
             const { error: tErr } = await supabase.from("threads").update(update).eq("id", body.threadId);
             if (tErr) console.error("update thread failed", tErr);
-          },
+          },          
         });
       },
     },
