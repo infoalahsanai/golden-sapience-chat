@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import type { Message } from "ai";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
 import { Globe, Send, Square } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { listModels } from "@/server/models.functions";
-import { DEFAULT_SELECTION, PROVIDERS, type ProviderId } from "@/lib/providers";
+import { DEFAULT_MODELS, DEFAULT_SELECTION, PROVIDERS, type ProviderId } from "@/lib/providers";
 import { ModelPicker } from "./ModelPicker";
 import { cn } from "@/lib/utils";
 import mark from "@/assets/sapience-mark.png";
@@ -23,14 +21,13 @@ const SUGGESTIONS = [
 
 export function ChatWindow({ threadId, initialMessages }: { threadId: string; initialMessages: Message[] }) {
   const qc = useQueryClient();
-  const fetchModels = useServerFn(listModels);
-  const modelsQ = useQuery({ queryKey: ["models"], queryFn: () => fetchModels(), staleTime: 1000 * 60 * 30 });
-  const models = modelsQ.data ?? [];
 
   const [sel, setSel] = useState<{ provider: ProviderId; model: string }>(DEFAULT_SELECTION);
   const [web, setWeb] = useState(true);
   const selRef = useRef({ ...sel, web });
   selRef.current = { ...sel, web };
+
+  const models = DEFAULT_MODELS[sel.provider] ?? [];
 
   useEffect(() => {
     try {
@@ -154,7 +151,7 @@ export function ChatWindow({ threadId, initialMessages }: { threadId: string; in
                 provider={sel.provider}
                 model={sel.model}
                 models={models}
-                loading={modelsQ.isLoading}
+                loading={false}
                 onChange={(provider, model) => setSel({ provider, model })}
               />
               <button
