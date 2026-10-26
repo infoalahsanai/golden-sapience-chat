@@ -1,11 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
-import { convertToModelMessages, stepCountIs, streamText, type ToolSet, type UIMessage } from "ai";
+import { convertToCoreMessages, streamText, type Message } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { isProviderId, type ProviderId } from "@/lib/providers";
-
 function systemPrompt() {
   const now = new Date().toUTCString();
   return `তুমি Sapience AI — একজন গভীর চিন্তাশীল, উষ্ণ ও বুদ্ধিমান সহচর। আজকের তারিখ ও সময় (UTC): ${now}.
@@ -21,11 +20,13 @@ You are Sapience AI. Behave like a thoughtful, emotionally intelligent human exp
 function buildModel(provider: ProviderId, model: string, web: boolean) {
   if (provider === "gemini") {
     const google = createGoogleGenerativeAI({ apiKey: process.env["GEMINI_API_KEY"] ?? "" });
-    return {
-      model: google(model),
-      tools: (web ? { google_search: google.tools.googleSearch({}) } : {}) as ToolSet,
-    };
-  }
+    if (provider === "gemini") {
+  const google = createGoogleGenerativeAI({ apiKey: process.env["GEMINI_API_KEY"] ?? "" });
+  return {
+    model: google(model, web ? { useSearchGrounding: true } : {}),
+    tools: {},
+  };
+}
   if (provider === "openrouter") {
     const or = createOpenAICompatible({
       name: "openrouter",
