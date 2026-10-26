@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import type { Message } from "ai";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Globe } from "lucide-react";
@@ -62,22 +62,12 @@ export function ChatWindow({ threadId, initialMessages }: { threadId: string; in
   }, [sel, web]);
 
   const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: "/api/chat",
-        headers: async (): Promise<Record<string, string>> => {
-          const { data } = await supabase.auth.getSession();
-          const token = data.session?.access_token;
-          return token ? { Authorization: `Bearer ${token}` } : {};
-        },
-        body: () => ({ threadId, ...selRef.current }),
-      }),
-    [threadId],
-  );
-
-  const { messages, sendMessage, status, stop } = useChat({
-    id: threadId,
-    messages: initialMessages,
+      const { messages, append, status, stop } = useChat({
+  id: threadId,
+  api: "/api/chat",
+  initialMessages,
+  body: { threadId, ...selRef.current },
+});
     transport,
     onError: (err) => toast.error(err.message || "উত্তর আনা যায়নি"),
     onFinish: ({ messages: all }) => {
