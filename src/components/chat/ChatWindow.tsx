@@ -80,10 +80,9 @@ export function ChatWindow({ threadId, initialMessages }: { threadId: string; in
     messages: initialMessages,
     transport,
     onError: (err) => toast.error(err.message || "উত্তর আনা যায়নি"),
-    onFinish: () => {
+    onFinish: ({ messages: all }) => {
       qc.invalidateQueries({ queryKey: ["threads"] });
-      qc.setQueryData(["messages", threadId], undefined);
-      qc.removeQueries({ queryKey: ["messages", threadId] });
+      qc.setQueryData(["messages", threadId], all);
     },
   });
 
