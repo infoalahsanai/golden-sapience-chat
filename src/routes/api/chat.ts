@@ -96,41 +96,29 @@ export const Route = createFileRoute("/api/chat")({
           maxRetries: 1,
           maxSteps: 5,
           abortSignal: request.signal,
-        });
-
-        return result.toDataStreamResponse({
-          onError: (err: unknown) => {
-            console.error("chat error", err);
-            const msg = err instanceof Error ? err.message : String(err);
-            if (/quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(msg))
-              return "এই API key-এর সীমা (quota) শেষ হয়ে গেছে। কিছুক্ষণ পরে চেষ্টা করুন বা অন্য মডেল/প্রোভাইডার বেছে নিন।";
-            if (/credits|402|afford/i.test(msg))
-              return "এই প্রোভাইডারের অ্যাকাউন্টে ক্রেডিট কম। ক্রেডিট যোগ করুন বা অন্য প্রোভাইডার বেছে নিন।";
-            if (/401|invalid.*key|unauthorized/i.test(msg)) return "API key সঠিক নয় বা বাতিল হয়ে গেছে।";
-            return `মডেল থেকে উত্তর আনা যায়নি: ${msg.slice(0, 200)}`;
-          },
-          onFinish: async ({ responseMessages }) => {
-            const rows = (responseMessages ?? []).map((m: any) => ({
-              thread_id: body.threadId,
-              user_id: userId,
-              ui_id: m.id ?? crypto.randomUUID(),
-              role: m.role,
-              parts: [{ type: "text", text: m.content ?? "" }] as unknown as Json,
-            }));
-            if (rows.length > 0) {
-              const { error } = await supabase.from("messages").upsert(rows, { onConflict: "thread_id,ui_id" });
-              if (error) console.error("save messages failed", error);
+          onFinish: async ({ text }) => {
+            if (text) {
+              const row = {
+                thread_id: body.threadId,
+                user_id: userId,
+                ui_id: crypto.randomUUID(),
+                role: "assistant",
+                parts: [{ type: "text", text }] as unknown as Json,
+              };
+              await supabase.from("messages").insert(row);
             }
 
             const firstUser = body.messages.find((m) => m.role === "user");
-            const update: { updated_at: string; title?: string } = { updated_at: new Date().toISOString() };
             if (thread.title === "নতুন কথোপকথন" && firstUser?.content) {
-              update.title = firstUser.content.slice(0, 60);
+              await supabase
+                .from("threads")
+                .update({ title: firstUser.content.slice(0, 60), updated_at: new Date().toISOString() })
+                .eq("id", body.threadId);
             }
-            const { error: tErr } = await supabase.from("threads").update(update).eq("id", body.threadId);
-            if (tErr) console.error("update thread failed", tErr);
           },
         });
+
+        return result.toDataStreamResponse();
       },
     },
   },
