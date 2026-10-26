@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import type { UIMessage } from "ai";
+import type { Message } from "ai";
 import { supabase } from "@/integrations/supabase/client";
 
 export const threadsQuery = queryOptions({
@@ -17,18 +17,22 @@ export const threadsQuery = queryOptions({
 export const messagesQuery = (threadId: string) =>
   queryOptions({
     queryKey: ["messages", threadId],
-    queryFn: async (): Promise<UIMessage[]> => {
+    queryFn: async (): Promise<Message[]> => {
       const { data, error } = await supabase
         .from("messages")
         .select("ui_id, role, parts")
         .eq("thread_id", threadId)
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return data.map((r) => ({
-        id: r.ui_id,
-        role: r.role as UIMessage["role"],
-        parts: r.parts as unknown as UIMessage["parts"],
-      }));
+      return (data ?? []).map((r) => {
+        const parts = (r.parts as any[]) ?? [];
+        const textPart = parts.find((p: any) => p && typeof p === "object" && p.type === "text");
+        return {
+          id: r.ui_id,
+          role: r.role as Message["role"],
+          content: textPart?.text ?? "",
+        };
+      });
     },
     staleTime: Infinity,
   });
