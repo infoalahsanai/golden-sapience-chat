@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
-import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai";
+import { convertToModelMessages, stepCountIs, streamText, type ToolSet, type UIMessage } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { Database, Json } from "@/integrations/supabase/types";
@@ -20,27 +20,27 @@ You are Sapience AI. Behave like a thoughtful, emotionally intelligent human exp
 
 function buildModel(provider: ProviderId, model: string, web: boolean) {
   if (provider === "gemini") {
-    const google = createGoogleGenerativeAI({ apiKey: process.env["GEMINI_API_KEY"] });
+    const google = createGoogleGenerativeAI({ apiKey: process.env["GEMINI_API_KEY"] ?? "" });
     return {
       model: google(model),
-      tools: web ? { google_search: google.tools.googleSearch({}) } : undefined,
+      tools: (web ? { google_search: google.tools.googleSearch({}) } : {}) as ToolSet,
     };
   }
   if (provider === "openrouter") {
     const or = createOpenAICompatible({
       name: "openrouter",
       baseURL: "https://openrouter.ai/api/v1",
-      apiKey: process.env["OPENROUTER_API_KEY"],
+      apiKey: process.env["OPENROUTER_API_KEY"] ?? "",
       headers: { "X-Title": "Sapience AI" },
     });
-    return { model: or(web && !model.endsWith(":online") ? `${model}:online` : model), tools: undefined };
+    return { model: or(web && !model.endsWith(":online") ? `${model}:online` : model), tools: {} as ToolSet };
   }
   const groq = createOpenAICompatible({
     name: "groq",
     baseURL: "https://api.groq.com/openai/v1",
-    apiKey: process.env["GROQ_API_KEY"],
+    apiKey: process.env["GROQ_API_KEY"] ?? "",
   });
-  return { model: groq(model), tools: undefined };
+  return { model: groq(model), tools: {} as ToolSet };
 }
 
 export const Route = createFileRoute("/api/chat")({

@@ -43,7 +43,10 @@ function ChatLayout() {
 
   async function remove(id: string) {
     const { error } = await supabase.from("threads").delete().eq("id", id);
-    if (error) return toast.error("মুছে ফেলা যায়নি");
+    if (error) {
+      toast.error("মুছে ফেলা যায়নি");
+      return;
+    }
     await qc.invalidateQueries({ queryKey: ["threads"] });
     if (params.threadId === id) navigate({ to: "/chat" });
   }
