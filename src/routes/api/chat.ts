@@ -92,6 +92,9 @@ export const Route = createFileRoute("/api/chat")({
           system: systemPrompt(),
           messages: await convertToModelMessages(body.messages),
           tools,
+          // OpenRouter reserves credits for the full output budget; a bounded cap keeps low-balance keys usable.
+          ...(body.provider === "openrouter" ? { maxOutputTokens: 4096 } : {}),
+          maxRetries: 1,
           stopWhen: stepCountIs(5),
           abortSignal: request.signal,
         });
@@ -103,7 +106,12 @@ export const Route = createFileRoute("/api/chat")({
           onError: (err) => {
             console.error("chat error", err);
             const msg = err instanceof Error ? err.message : String(err);
-            return `মডেল থেকে উত্তর আনা যায়নি: ${msg}`;
+            if (/quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(msg))
+              return "এই API key-এর সীমা (quota) শেষ হয়ে গেছে। কিছুক্ষণ পরে চেষ্টা করুন বা অন্য মডেল/প্রোভাইডার বেছে নিন।";
+            if (/credits|402|afford/i.test(msg))
+              return "এই প্রোভাইডারের অ্যাকাউন্টে ক্রেডিট কম। ক্রেডিট যোগ করুন বা অন্য প্রোভাইডার বেছে নিন।";
+            if (/401|invalid.*key|unauthorized/i.test(msg)) return "API key সঠিক নয় বা বাতিল হয়ে গেছে।";
+            return `মডেল থেকে উত্তর আনা যায়নি: ${msg.slice(0, 200)}`;
           },
           onFinish: async ({ messages }) => {
             const rows = messages.map((m) => ({
