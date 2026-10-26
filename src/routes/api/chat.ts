@@ -5,6 +5,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { isProviderId, type ProviderId } from "@/lib/providers";
+
 function systemPrompt() {
   const now = new Date().toUTCString();
   return `তুমি Sapience AI — একজন গভীর চিন্তাশীল, উষ্ণ ও বুদ্ধিমান সহচর। আজকের তারিখ ও সময় (UTC): ${now}.
@@ -20,13 +21,11 @@ You are Sapience AI. Behave like a thoughtful, emotionally intelligent human exp
 function buildModel(provider: ProviderId, model: string, web: boolean) {
   if (provider === "gemini") {
     const google = createGoogleGenerativeAI({ apiKey: process.env["GEMINI_API_KEY"] ?? "" });
-    if (provider === "gemini") {
-  const google = createGoogleGenerativeAI({ apiKey: process.env["GEMINI_API_KEY"] ?? "" });
-  return {
-    model: google(model, web ? { useSearchGrounding: true } : {}),
-    tools: {},
-  };
-}
+    return {
+      model: google(model, web ? { useSearchGrounding: true } : {}),
+      tools: {},
+    };
+  }
   if (provider === "openrouter") {
     const or = createOpenAICompatible({
       name: "openrouter",
@@ -34,14 +33,14 @@ function buildModel(provider: ProviderId, model: string, web: boolean) {
       apiKey: process.env["OPENROUTER_API_KEY"] ?? "",
       headers: { "X-Title": "Sapience AI" },
     });
-    return { model: or(web && !model.endsWith(":online") ? `${model}:online` : model), tools: {} as ToolSet };
+    return { model: or(web && !model.endsWith(":online") ? `${model}:online` : model), tools: {} };
   }
   const groq = createOpenAICompatible({
     name: "groq",
     baseURL: "https://api.groq.com/openai/v1",
     apiKey: process.env["GROQ_API_KEY"] ?? "",
   });
-  return { model: groq(model), tools: {} as ToolSet };
+  return { model: groq(model), tools: {} };
 }
 
 export const Route = createFileRoute("/api/chat")({
@@ -69,7 +68,7 @@ export const Route = createFileRoute("/api/chat")({
         const userId = userData.user.id;
 
         const body = (await request.json()) as {
-          messages: UIMessage[];
+          messages: Message[];
           threadId: string;
           provider: string;
           model: string;
@@ -91,20 +90,16 @@ export const Route = createFileRoute("/api/chat")({
         const result = streamText({
           model,
           system: systemPrompt(),
-          messages: await convertToModelMessages(body.messages),
+          messages: convertToCoreMessages(body.messages),
           tools,
-          // OpenRouter reserves credits for the full output budget; a bounded cap keeps low-balance keys usable.
           ...(body.provider === "openrouter" ? { maxOutputTokens: 4096 } : {}),
           maxRetries: 1,
-          stopWhen: stepCountIs(5),
+          maxSteps: 5,
           abortSignal: request.signal,
         });
 
-        return result.toUIMessageStreamResponse({
-          originalMessages: body.messages,
-          sendReasoning: true,
-          sendSources: true,
-                    onError: (err: unknown) => {
+        return result.toDataStreamResponse({
+          onError: (err: unknown) => {
             console.error("chat error", err);
             const msg = err instanceof Error ? err.message : String(err);
             if (/quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(msg))
@@ -114,29 +109,27 @@ export const Route = createFileRoute("/api/chat")({
             if (/401|invalid.*key|unauthorized/i.test(msg)) return "API key সঠিক নয় বা বাতিল হয়ে গেছে।";
             return `মডেল থেকে উত্তর আনা যায়নি: ${msg.slice(0, 200)}`;
           },
-          onFinish: async ({ messages }: { messages: UIMessage[] }) => {
-            const rows = messages.map((m: UIMessage) => ({
+          onFinish: async ({ responseMessages }) => {
+            const rows = (responseMessages ?? []).map((m: any) => ({
               thread_id: body.threadId,
               user_id: userId,
-              ui_id: m.id,
+              ui_id: m.id ?? crypto.randomUUID(),
               role: m.role,
-              parts: m.parts as unknown as Json,
+              parts: [{ type: "text", text: m.content ?? "" }] as unknown as Json,
             }));
-            const { error } = await supabase.from("messages").upsert(rows, { onConflict: "thread_id,ui_id" });
-            if (error) console.error("save messages failed", error);
+            if (rows.length > 0) {
+              const { error } = await supabase.from("messages").upsert(rows, { onConflict: "thread_id,ui_id" });
+              if (error) console.error("save messages failed", error);
+            }
 
-            const firstUser = messages.find((m: UIMessage) => m.role === "user");
-            const firstText = firstUser?.parts?.find(
-              (p: unknown): p is { type: "text"; text: string } =>
-                typeof p === "object" && p !== null && "type" in p && (p as { type: string }).type === "text"
-            );
+            const firstUser = body.messages.find((m) => m.role === "user");
             const update: { updated_at: string; title?: string } = { updated_at: new Date().toISOString() };
-            if (thread.title === "নতুন কথোপকথন" && firstText?.text) {
-              update.title = firstText.text.slice(0, 60);
+            if (thread.title === "নতুন কথোপকথন" && firstUser?.content) {
+              update.title = firstUser.content.slice(0, 60);
             }
             const { error: tErr } = await supabase.from("threads").update(update).eq("id", body.threadId);
             if (tErr) console.error("update thread failed", tErr);
-          },          
+          },
         });
       },
     },
