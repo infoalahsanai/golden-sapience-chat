@@ -27,14 +27,15 @@ export function ChatWindow({ threadId, initialMessages }: { threadId: string; in
   const selRef = useRef({ ...sel, web });
   selRef.current = { ...sel, web };
 
-  const models = DEFAULT_MODELS[sel.provider] ?? [];
-
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed?.provider && parsed?.model) {
+        const valid =
+          parsed?.provider in DEFAULT_MODELS &&
+          DEFAULT_MODELS[parsed.provider as ProviderId].some((m) => m.id === parsed.model);
+        if (valid && parsed.provider !== "gemini") {
           setSel({ provider: parsed.provider, model: parsed.model });
           if (typeof parsed.web === "boolean") setWeb(parsed.web);
         }
@@ -52,12 +53,6 @@ export function ChatWindow({ threadId, initialMessages }: { threadId: string; in
     id: threadId,
     api: "/api/chat",
     initialMessages,
-    headers: async () => {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      return token ? { Authorization: `Bearer ${token}` } : {};
-    },
-    body: { threadId, ...selRef.current },
     onError: (err) => toast.error(err.message || "উত্তর আনা যায়নি"),
     onFinish: () => {
       qc.invalidateQueries({ queryKey: ["threads"] });
@@ -74,10 +69,20 @@ export function ChatWindow({ threadId, initialMessages }: { threadId: string; in
 
   const webSupported = sel.provider !== "groq";
 
-  function send(text: string) {
+  async function send(text: string) {
     if (!text.trim() || busy) return;
-    append({ role: "user", content: text });
     setInput("");
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      toast.error("আবার লগইন করুন");
+      return;
+    }
+    // Headers/body are passed per request so the token and current model selection are always fresh.
+    append(
+      { role: "user", content: text },
+      { headers: { Authorization: `Bearer ${token}` }, body: { threadId, ...selRef.current } },
+    );
   }
 
   return (
@@ -150,7 +155,7 @@ export function ChatWindow({ threadId, initialMessages }: { threadId: string; in
               <ModelPicker
                 provider={sel.provider}
                 model={sel.model}
-                models={models}
+                models={DEFAULT_MODELS}
                 loading={false}
                 onChange={(provider, model) => setSel({ provider, model })}
               />
