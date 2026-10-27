@@ -155,7 +155,7 @@ export function ChatWindow({ threadId, initialMessages }: { threadId: string; in
               <ModelPicker
                 provider={sel.provider}
                 model={sel.model}
-                models={models}
+                models={DEFAULT_MODELS}
                 loading={false}
                 onChange={(provider, model) => setSel({ provider, model })}
               />
