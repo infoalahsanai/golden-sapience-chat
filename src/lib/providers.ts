@@ -19,19 +19,20 @@ export const DEFAULT_MODELS: Record<ProviderId, ModelOption[]> = {
     { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
   ],
   openrouter: [
-    { id: "openai/gpt-6.1-sol", label: "OpenAI: GPT-6.1 Sol" },
-    { id: "anthropic/claude-sonnet-5.5", label: "Anthropic: Claude Sonnet 5.5" },
-    { id: "google/gemini-4-argon", label: "Google: Gemini 4 Argon" },
-    { id: "moonshotai/kimi-k3.1-pro", label: "MoonshotAI: Kimi K3.1 Pro" },
+    { id: "meta-llama/llama-3.3-70b-instruct", label: "Meta: Llama 3.3 70B" },
+    { id: "qwen/qwen-2.5-72b-instruct", label: "Qwen 2.5 72B" },
+    { id: "deepseek/deepseek-v4.1-flash", label: "DeepSeek V4.1 Flash" },
+    { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
   ],
   groq: [
-    { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
     { id: "qwen/qwen3.8-27b", label: "Qwen 3.8 27B" },
+    { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
     { id: "openai/gpt-oss-20b", label: "GPT-OSS 20B" },
   ],
 };
 
-export const DEFAULT_SELECTION = { provider: "gemini" as ProviderId, model: "gemini-3.8-flash" };
+// Groq qwen verified live (200 OK); Gemini key currently times out/blocks old models.
+export const DEFAULT_SELECTION = { provider: "groq" as ProviderId, model: "qwen/qwen3.8-27b" };
 
 export function isProviderId(v: unknown): v is ProviderId {
   return v === "gemini" || v === "openrouter" || v === "groq";
